@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+web/node_modules/
+
+# Build
+web/dist/
+web/.vite/
+
+# Environment
+.env
+.env.local
+web/.env
+web/.env.local
+scraper/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+scraper/.venv/
+
+# Playwright
+scraper/playwright-state.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
