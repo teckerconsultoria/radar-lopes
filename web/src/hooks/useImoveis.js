@@ -9,27 +9,30 @@ export function useImoveis() {
   const [error, setError] = useState(null);
   const debounceRef = useRef(null);
 
-  const filters = useFiltersStore((s) => ({
-    texto: s.texto,
-    tipos: s.tipos,
-    bairros: s.bairros,
-    quartosMin: s.quartosMin,
-    quartosMax: s.quartosMax,
-    suitesMin: s.suitesMin,
-    garagemMin: s.garagemMin,
-    precoMin: s.precoMin,
-    precoMax: s.precoMax,
-    areaMin: s.areaMin,
-    areaMax: s.areaMax,
-    andar: s.andar,
-    ehTerreo: s.ehTerreo,
-    caracteristicas: s.caracteristicas,
-    diasAtualizacao: s.diasAtualizacao,
-  }));
-
-  const sortBy = useFiltersStore((s) => s.sortBy);
+  // Select each primitive individually — stable references, no new object each render
+  const texto        = useFiltersStore((s) => s.texto);
+  const tipos        = useFiltersStore((s) => s.tipos);
+  const bairros      = useFiltersStore((s) => s.bairros);
+  const quartosMin   = useFiltersStore((s) => s.quartosMin);
+  const quartosMax   = useFiltersStore((s) => s.quartosMax);
+  const suitesMin    = useFiltersStore((s) => s.suitesMin);
+  const garagemMin   = useFiltersStore((s) => s.garagemMin);
+  const precoMin     = useFiltersStore((s) => s.precoMin);
+  const precoMax     = useFiltersStore((s) => s.precoMax);
+  const areaMin      = useFiltersStore((s) => s.areaMin);
+  const areaMax      = useFiltersStore((s) => s.areaMax);
+  const andar        = useFiltersStore((s) => s.andar);
+  const ehTerreo     = useFiltersStore((s) => s.ehTerreo);
+  const caracteristicas = useFiltersStore((s) => s.caracteristicas);
+  const diasAtualizacao = useFiltersStore((s) => s.diasAtualizacao);
+  const sortBy       = useFiltersStore((s) => s.sortBy);
 
   useEffect(() => {
+    const filters = {
+      texto, tipos, bairros, quartosMin, quartosMax, suitesMin, garagemMin,
+      precoMin, precoMax, areaMin, areaMax, andar, ehTerreo,
+      caracteristicas, diasAtualizacao,
+    };
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
@@ -42,7 +45,9 @@ export function useImoveis() {
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [JSON.stringify(filters), sortBy]);
+  }, [texto, JSON.stringify(tipos), JSON.stringify(bairros), quartosMin, quartosMax,
+      suitesMin, garagemMin, precoMin, precoMax, areaMin, areaMax, andar, ehTerreo,
+      JSON.stringify(caracteristicas), diasAtualizacao, sortBy]);
 
   return { imoveis, count, loading, error };
 }

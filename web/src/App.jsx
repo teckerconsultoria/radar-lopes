@@ -11,7 +11,13 @@ export default function App() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [opcoes, setOpcoes] = useState(null);
   const { imoveis, count, loading, error } = useImoveis();
-  const temFiltrosAtivos = useFiltersStore((s) => s.temFiltrosAtivos);
+  const temFiltrosAtivos = useFiltersStore((s) =>
+    !!(s.texto || s.tipos.length || s.bairros.length || s.quartosMin != null ||
+       s.quartosMax != null || s.suitesMin != null || s.garagemMin != null ||
+       s.precoMin != null || s.precoMax != null || s.areaMin != null ||
+       s.areaMax != null || s.andar != null || s.ehTerreo ||
+       s.caracteristicas.length || s.diasAtualizacao != null)
+  );
 
   useEffect(() => {
     buscarOpcoesFilters().then(setOpcoes);
@@ -45,7 +51,7 @@ export default function App() {
                 d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
             </svg>
             Filtros
-            {temFiltrosAtivos() && (
+            {temFiltrosAtivos && (
               <span className="bg-brand-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
                 ●
               </span>

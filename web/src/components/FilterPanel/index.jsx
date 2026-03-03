@@ -31,7 +31,13 @@ const DIAS_OPT = [
 export default function FilterPanel({ opcoes, isOpen, onClose }) {
   const setFiltro = useFiltersStore((s) => s.setFiltro);
   const limparFiltros = useFiltersStore((s) => s.limparFiltros);
-  const temFiltrosAtivos = useFiltersStore((s) => s.temFiltrosAtivos);
+  const temFiltrosAtivos = useFiltersStore((s) =>
+    !!(s.texto || s.tipos.length || s.bairros.length || s.quartosMin != null ||
+       s.quartosMax != null || s.suitesMin != null || s.garagemMin != null ||
+       s.precoMin != null || s.precoMax != null || s.areaMin != null ||
+       s.areaMax != null || s.andar != null || s.ehTerreo ||
+       s.caracteristicas.length || s.diasAtualizacao != null)
+  );
   const suitesMin = useFiltersStore((s) => s.suitesMin);
   const garagemMin = useFiltersStore((s) => s.garagemMin);
   const ehTerreo = useFiltersStore((s) => s.ehTerreo);
@@ -41,7 +47,7 @@ export default function FilterPanel({ opcoes, isOpen, onClose }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Filtros</h2>
-        {temFiltrosAtivos() && (
+        {temFiltrosAtivos && (
           <button
             onClick={limparFiltros}
             className="text-xs text-brand-600 hover:text-brand-800 font-medium"

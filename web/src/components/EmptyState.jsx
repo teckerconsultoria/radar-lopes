@@ -2,7 +2,13 @@ import { useFiltersStore } from "../store/filters";
 
 export default function EmptyState({ loading }) {
   const limparFiltros = useFiltersStore((s) => s.limparFiltros);
-  const temFiltrosAtivos = useFiltersStore((s) => s.temFiltrosAtivos);
+  const temFiltrosAtivos = useFiltersStore((s) =>
+    !!(s.texto || s.tipos.length || s.bairros.length || s.quartosMin != null ||
+       s.quartosMax != null || s.suitesMin != null || s.garagemMin != null ||
+       s.precoMin != null || s.precoMax != null || s.areaMin != null ||
+       s.areaMax != null || s.andar != null || s.ehTerreo ||
+       s.caracteristicas.length || s.diasAtualizacao != null)
+  );
 
   if (loading) return null;
 
@@ -15,7 +21,7 @@ export default function EmptyState({ loading }) {
       <p className="text-sm text-gray-500 max-w-xs mb-6">
         Tente termos mais simples, remova alguns filtros ou amplie as faixas de preço e área.
       </p>
-      {temFiltrosAtivos() && (
+      {temFiltrosAtivos && (
         <button onClick={limparFiltros} className="btn-primary">
           Limpar filtros
         </button>
