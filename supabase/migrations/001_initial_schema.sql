@@ -3,7 +3,6 @@
 -- Lopes de Andrade Imóveis
 -- ============================================================
 
--- Tabela principal de imóveis
 CREATE TABLE IF NOT EXISTS imoveis (
   id                   BIGSERIAL PRIMARY KEY,
   url                  TEXT UNIQUE NOT NULL,
@@ -13,8 +12,6 @@ CREATE TABLE IF NOT EXISTS imoveis (
   bairro               TEXT,
   cidade               TEXT DEFAULT 'João Pessoa',
   uf                   TEXT DEFAULT 'PB',
-
-  -- Características numéricas
   preco                NUMERIC,
   area_m2              NUMERIC,
   quartos              INTEGER,
@@ -23,39 +20,22 @@ CREATE TABLE IF NOT EXISTS imoveis (
   garagem              INTEGER,
   andar                INTEGER,
   total_andares        INTEGER,
-
-  -- Flags booleanas
   eh_terreo            BOOLEAN DEFAULT FALSE,
   eh_cobertura         BOOLEAN DEFAULT FALSE,
   aceita_financiamento BOOLEAN,
   novo                 BOOLEAN DEFAULT FALSE,
   reformado            BOOLEAN DEFAULT FALSE,
-
-  -- Arrays e texto longo
   caracteristicas      TEXT[],
   pois                 TEXT[],
   descricao            TEXT,
   fotos                TEXT[],
-
-  -- Metadados
   status               TEXT DEFAULT 'ativo',
   fonte                INTEGER DEFAULT 1,
   ultima_modificacao   DATE,
   scraped_at           TIMESTAMPTZ DEFAULT NOW(),
   created_at           TIMESTAMPTZ DEFAULT NOW(),
   updated_at           TIMESTAMPTZ DEFAULT NOW(),
-
-  -- Full-Text Search em português
-  fts                  TSVECTOR GENERATED ALWAYS AS (
-                         to_tsvector('portuguese',
-                           COALESCE(titulo, '') || ' ' ||
-                           COALESCE(bairro, '') || ' ' ||
-                           COALESCE(tipo, '') || ' ' ||
-                           COALESCE(descricao, '') || ' ' ||
-                           COALESCE(array_to_string(caracteristicas, ' '), '') || ' ' ||
-                           COALESCE(array_to_string(pois, ' '), '')
-                         )
-                       ) STORED
+  fts                  TSVECTOR
 );
 
 -- Índices para performance
@@ -71,18 +51,26 @@ CREATE INDEX IF NOT EXISTS idx_imoveis_andar    ON imoveis(andar);
 CREATE INDEX IF NOT EXISTS idx_imoveis_garagem  ON imoveis(garagem);
 CREATE INDEX IF NOT EXISTS idx_imoveis_atualiz  ON imoveis(ultima_modificacao);
 
--- Trigger para atualizar updated_at automaticamente
-CREATE OR REPLACE FUNCTION update_updated_at()
+-- Trigger: mantém updated_at e fts automaticamente
+CREATE OR REPLACE FUNCTION imoveis_before_upsert()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
+  NEW.fts = to_tsvector('portuguese',
+    COALESCE(NEW.titulo, '') || ' ' ||
+    COALESCE(NEW.bairro, '') || ' ' ||
+    COALESCE(NEW.tipo, '') || ' ' ||
+    COALESCE(NEW.descricao, '') || ' ' ||
+    COALESCE(array_to_string(NEW.caracteristicas, ' '), '') || ' ' ||
+    COALESCE(array_to_string(NEW.pois, ' '), '')
+  );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_imoveis_updated_at
-  BEFORE UPDATE ON imoveis
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_imoveis_upsert
+  BEFORE INSERT OR UPDATE ON imoveis
+  FOR EACH ROW EXECUTE FUNCTION imoveis_before_upsert();
 
 -- Tabela de logs de scraping
 CREATE TABLE IF NOT EXISTS scraping_logs (
