@@ -26,8 +26,9 @@ import os
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from bs4 import BeautifulSoup
 from supabase import create_client, Client
+import anthropic
 
-load_dotenv()
+load_dotenv(override=True)
 
 # ── Logger ───────────────────────────────────────────────────────────────────
 log = logging.getLogger("scraper")
@@ -57,6 +58,22 @@ PAGE_TIMEOUT = 30_000  # ms
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 
+ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
+LLM_MODEL      = "claude-haiku-4-5-20251001"
+LLM_MAX_TOKENS = 512
+LLM_FALLBACK   = {
+    "suites":       None,
+    "banheiros":    None,
+    "garagem":      None,
+    "andar":        None,
+    "eh_terreo":    False,
+    "eh_cobertura": False,
+    "novo":         False,
+    "reformado":    False,
+    "caracteristicas": [],
+    "pois":         [],
+}
+
 # Categorias do site + seus term IDs (WP taxonomy: job_listing_category)
 # Obtidos por inspeção das chamadas AJAX do tema My Listing
 CATEGORIES = {
@@ -81,33 +98,6 @@ TIPO_MAP = {
 }
 
 LISTING_TYPES = ["for-sale", "for-rent"]
-
-# ── Palavras-chave para extração semântica ─────────────────────────────────────
-CARACTERISTICAS_KEYWORDS = [
-    "piscina", "varanda", "sacada", "churrasqueira", "área de lazer",
-    "playground", "academia", "salão de festas", "quadra", "elevador",
-    "portaria 24h", "segurança", "condomínio fechado", "gourmet",
-    "vista mar", "nascente", "poente", "reformado", "novo", "moderno",
-    "ar condicionado", "cozinha americana", "closet", "despensa",
-    "lavanderia", "dependência", "interfone", "câmeras", "gerador",
-    "energia solar", "cabeamento estruturado",
-]
-
-POIS_PATTERNS = [
-    r"shopping\s+\w+",
-    r"praia\s+d[aeo]\s+\w+",
-    r"ufpb|unifacisa|unipê|iesp",
-    r"hospital\s+\w+",
-    r"colégio\s+\w+",
-    r"escola\s+\w+",
-    r"mercado\s+\w+",
-    r"supermercado\s+\w+",
-    r"parque\s+\w+",
-    r"av(?:enida)?\s+\w+",
-    r"\d+\s*m\s+d[ao]",
-    r"próximo\s+(?:ao?|à)\s+\w+",
-    r"a\s+\d+\s*m(?:etros)?\s+d[ao]",
-]
 
 
 # ── Supabase ──────────────────────────────────────────────────────────────────
@@ -157,22 +147,96 @@ def extrair_area(texto: str) -> float | None:
     return None
 
 
-def extrair_caracteristicas(descricao: str) -> list[str]:
-    if not descricao:
-        return []
-    texto = descricao.lower()
-    return list({kw for kw in CARACTERISTICAS_KEYWORDS if kw in texto})
 
+# ── Extração semântica via LLM ────────────────────────────────────────────────
+def extrair_campos_llm(
+    descricao: str,
+    titulo: str,
+    tem_suite: bool = False,
+    tem_garagem: bool = False,
+    debug: bool = False,
+) -> dict:
+    """
+    Usa o claude-haiku para extrair campos semânticos da descrição do anúncio.
+    Retorna LLM_FALLBACK em caso de erro — nunca propaga exceção.
+    """
+    if not descricao and not titulo:
+        return LLM_FALLBACK.copy()
 
-def extrair_pois(descricao: str) -> list[str]:
-    if not descricao:
-        return []
-    texto = descricao.lower()
-    encontrados = []
-    for pattern in POIS_PATTERNS:
-        matches = re.findall(pattern, texto)
-        encontrados.extend(matches)
-    return list(set(encontrados))
+    system_prompt = (
+        "Você é um extrator de dados de anúncios imobiliários brasileiros.\n"
+        "Analise o título e descrição fornecidos e retorne SOMENTE um objeto JSON válido,\n"
+        "sem texto adicional, markdown ou explicações.\n\n"
+        "Regras:\n"
+        "- Use null para campos não mencionados ou incertos\n"
+        "- Converta numerais por extenso para inteiros (uma=1, dois=2, três=3...)\n"
+        "- 'primeiro andar' = andar 1, 'segundo andar' = andar 2, 'térreo' = andar 0\n"
+        "- 'suíte' sem número = 1 suíte\n"
+        "- 'vaga' sem número = 1 vaga\n"
+        "- 'banheiro' sem número = 1 banheiro\n"
+        "- caracteristicas: lista de atributos físicos do imóvel (piscina, varanda, "
+        "churrasqueira, elevador, reformado, etc.) — máximo 15 itens, lowercase\n"
+        "- pois: pontos de interesse mencionados (shopping, praia, escola, hospital, "
+        "universidade, avenida, distâncias) — máximo 10 itens, lowercase"
+    )
+
+    user_prompt = (
+        f"Título: {titulo}\n"
+        f"Descrição: {descricao}\n\n"
+        f"Hints (dados já confirmados via HTML):\n"
+        f"- tem_suite: {tem_suite}\n"
+        f"- tem_garagem: {tem_garagem}\n\n"
+        'Retorne JSON com exatamente estas chaves:\n'
+        '{"suites": <int|null>, "banheiros": <int|null>, "garagem": <int|null>, '
+        '"andar": <int|null>, "eh_terreo": <bool>, "eh_cobertura": <bool>, '
+        '"novo": <bool>, "reformado": <bool>, '
+        '"caracteristicas": [<str>, ...], "pois": [<str>, ...]}'
+    )
+
+    if debug:
+        log.debug(f"[LLM] prompt enviado:\n{user_prompt}")
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+        message = client.messages.create(
+            model=LLM_MODEL,
+            max_tokens=LLM_MAX_TOKENS,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        raw = message.content[0].text.strip()
+        if debug:
+            log.debug(f"[LLM] resposta bruta: {raw}")
+
+        # Remove markdown code block se o modelo ignorar a instrução
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*", "", raw)
+            raw = re.sub(r"\s*```$", "", raw).strip()
+
+        resultado = json.loads(raw)
+
+        def to_int(v):
+            try:
+                return int(v) if v is not None else None
+            except (ValueError, TypeError):
+                return None
+
+        return {
+            "suites":          to_int(resultado.get("suites")),
+            "banheiros":       to_int(resultado.get("banheiros")),
+            "garagem":         to_int(resultado.get("garagem")),
+            "andar":           to_int(resultado.get("andar")),
+            "eh_terreo":       bool(resultado.get("eh_terreo", False)),
+            "eh_cobertura":    bool(resultado.get("eh_cobertura", False)),
+            "novo":            bool(resultado.get("novo", False)),
+            "reformado":       bool(resultado.get("reformado", False)),
+            "caracteristicas": [str(c).lower() for c in resultado.get("caracteristicas", []) if c],
+            "pois":            [str(p).lower() for p in resultado.get("pois", []) if p],
+        }
+
+    except (anthropic.APIError, json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+        log.warning(f"[LLM] falha na extração: {e} — usando fallback")
+        return LLM_FALLBACK.copy()
 
 
 def extrair_slug(url: str) -> str:
@@ -425,31 +489,25 @@ def scrape_imovel(page, url: str, dados_card: dict, debug: bool = False) -> dict
         if debug and area_m2:
             log.debug(f"  area_m2={area_m2} (via descricao)")
 
-    # ── Quartos/suítes/garagem ─────────────────────────────────────────────────────────
-    quartos = dados_card.get("quartos")
-    garagem = dados_card.get("garagem")
+    # ── LLM: extração semântica da descrição ──────────────────────────────────
+    campos_llm = extrair_campos_llm(
+        descricao=descricao or "",
+        titulo=titulo or "",
+        tem_suite=dados_card.get("tem_suite", False),
+        tem_garagem=bool(dados_card.get("garagem")),
+        debug=debug,
+    )
 
-    # Quartos: fallback pela descrição
+    # ── Quartos/garagem ────────────────────────────────────────────────────────
+    quartos = dados_card.get("quartos")
+    # Quartos: fallback pela descrição (mantido em regex — campo com seletor CSS confiável)
     if quartos is None and descricao:
         m = re.search(r"(\d+)\s*quartos?", descricao, re.IGNORECASE)
         if m:
             quartos = int(m.group(1))
 
-    # Suítes: quantidade sempre extraída da descrição
-    # tem_suite do card confirma presença; busca "N suíte(s)" no texto
-    suites = None
-    if descricao:
-        m = re.search(r"(\d+)\s*su[ií]tes?", descricao, re.IGNORECASE)
-        if m:
-            suites = int(m.group(1))
-    # Se a descrição não tem número mas o card confirma presença, marca 1
-    if suites is None and dados_card.get("tem_suite"):
-        suites = 1
-
-    if garagem is None and descricao:
-        m = re.search(r"(\d+)\s*vaga", descricao, re.IGNORECASE)
-        if m:
-            garagem = int(m.group(1))
+    # Garagem: card tem prioridade; LLM como fallback
+    garagem = dados_card.get("garagem") or campos_llm["garagem"]
 
     # ── Endereço, CEP, Lat, Lng ──────────────────────────────────────────────────
     endereco = None
@@ -493,30 +551,21 @@ def scrape_imovel(page, url: str, dados_card: dict, debug: bool = False) -> dict
                 bairro = raw.split(",")[0].strip()
                 break
 
-    # ── Flags ──────────────────────────────────────────────────────────────────
-    desc_lower = (titulo + " " + descricao).lower()
-    eh_terreo   = "térreo" in desc_lower or "terreo" in desc_lower
-    eh_cobertura = "cobertura" in desc_lower
-    novo        = any(k in desc_lower for k in ["lançamento", "nunca habitado"])
-    reformado   = any(k in desc_lower for k in ["reformado", "renovado", "recém reformado"])
+    # ── Campos semânticos vindos do LLM ───────────────────────────────────────
+    suites       = campos_llm["suites"]
+    banheiros    = campos_llm["banheiros"]
+    andar        = campos_llm["andar"]
+    eh_terreo    = campos_llm["eh_terreo"]
+    eh_cobertura = campos_llm["eh_cobertura"]
+    novo         = campos_llm["novo"]
+    reformado    = campos_llm["reformado"]
 
-    # ── Andar ──────────────────────────────────────────────────────────────────
-    andar = None
-    m = re.search(r"(\d+)[oº°]\s*andar", desc_lower)
-    if m:
-        andar = int(m.group(1))
-    elif "primeiro andar" in desc_lower:
-        andar = 1
-    elif "segundo andar" in desc_lower:
-        andar = 2
-
-    # ── Características: union card + descrição ────────────────────────────────
-    carac_desc = extrair_caracteristicas(descricao)
+    # Características: card + LLM (sem duplicatas, ordem estável)
     carac_card = dados_card.get("caracteristicas_card", [])
-    caracteristicas = list(set(carac_desc + carac_card)) or None
+    caracteristicas = list(dict.fromkeys(carac_card + campos_llm["caracteristicas"])) or None
 
-    # ── POIs ───────────────────────────────────────────────────────────────────
-    pois = extrair_pois(descricao) or None
+    # POIs
+    pois = campos_llm["pois"] or None
 
     # ── Fotos ──────────────────────────────────────────────────────────────────
     fotos = []
@@ -549,10 +598,11 @@ def scrape_imovel(page, url: str, dados_card: dict, debug: bool = False) -> dict
         log.debug(
             f"  RESULTADO: titulo='{titulo}' tipo={dados_card.get('tipo')} "
             f"bairro={bairro} preco={preco} area={area_m2} "
-            f"quartos={quartos} suites={suites} garagem={garagem} "
+            f"quartos={quartos} suites={suites} banheiros={banheiros} garagem={garagem} "
             f"andar={andar} fotos={len(fotos) if fotos else 0} "
-            f"carac={caracteristicas} pois={pois}"
+            f"carac={caracteristicas}"
         )
+        log.debug(f"  pois={pois}")
 
     return {
         "url": url,
@@ -564,7 +614,7 @@ def scrape_imovel(page, url: str, dados_card: dict, debug: bool = False) -> dict
         "area_m2": area_m2,
         "quartos": quartos,
         "suites": suites,
-        "banheiros": None,  # não exposto no site
+        "banheiros": banheiros,
         "garagem": garagem,
         "andar": andar,
         "eh_terreo": eh_terreo,
