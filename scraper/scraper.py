@@ -26,6 +26,7 @@ import os
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from bs4 import BeautifulSoup
 from supabase import create_client, Client
+import anthropic
 
 load_dotenv()
 
@@ -56,6 +57,7 @@ PAGE_TIMEOUT = 30_000  # ms
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 # Categorias do site + seus term IDs (WP taxonomy: job_listing_category)
 # Obtidos por inspeção das chamadas AJAX do tema My Listing
@@ -179,6 +181,60 @@ def extrair_slug(url: str) -> str:
     parsed = urlparse(url)
     parts = [p for p in parsed.path.split("/") if p]
     return parts[-1] if parts else url
+
+
+def extrair_com_llm(titulo: str, descricao: str) -> dict:
+    """
+    Usa Claude para extrair dados estruturados da descrição do imóvel.
+    Só é chamada quando há campos nulos após todas as extrações por regex.
+    """
+    if not ANTHROPIC_API_KEY:
+        return {}
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    prompt = f"""Você é um assistente que extrai dados estruturados de anúncios imobiliários brasileiros.
+
+Anúncio:
+Título: {titulo}
+Descrição: {descricao}
+
+Extraia os seguintes campos e retorne APENAS um JSON válido, sem texto adicional:
+{{
+  "quartos": null,
+  "suites": null,
+  "garagem": null,
+  "area_m2": null,
+  "bairro": null,
+  "andar": null,
+  "eh_terreo": null,
+  "eh_cobertura": null,
+  "caracteristicas": [],
+  "pois": []
+}}
+
+Regras:
+- quartos: total de dormitórios/quartos (suítes incluídas)
+- suites: apenas as suítes
+- garagem: número de vagas
+- area_m2: área em m² (privativa, útil ou total — preferir privativa)
+- bairro: nome do bairro (sem "Bairro", "no", "na", "em", etc.)
+- caracteristicas: características relevantes do imóvel (piscina, varanda, elevador, etc.)
+- pois: pontos de interesse mencionados (escolas, shoppings, praias, distâncias, etc.)
+- Para campos não mencionados, use null"""
+
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=512,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text.strip()
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.MULTILINE).strip()
+        return json.loads(raw)
+    except Exception as e:
+        log.warning(f"LLM extraction falhou: {e}")
+        return {}
 
 
 # ── Extração de dados do card (CSS classes do tema My Listing) ────────────────
@@ -429,6 +485,20 @@ def scrape_imovel(page, url: str, dados_card: dict, debug: bool = False) -> dict
     quartos = dados_card.get("quartos")
     garagem = dados_card.get("garagem")
 
+    # Quartos: fallback pela tabela extra-details da página
+    if quartos is None:
+        for li in soup.select("ul.extra-details li"):
+            label = li.select_one(".item-attr")
+            value = li.select_one(".item-property")
+            if label and value and "quarto" in label.get_text(strip=True).lower():
+                raw_q = value.get_text(strip=True)
+                m_q = re.search(r"\d+", raw_q)
+                if m_q:
+                    quartos = int(m_q.group())
+                if debug:
+                    log.debug(f"  quartos raw (extra-details)='{raw_q}' → quartos={quartos}")
+                break
+
     # Quartos: fallback pela descrição
     if quartos is None and descricao:
         m = re.search(r"(\d+)\s*quartos?", descricao, re.IGNORECASE)
@@ -492,6 +562,18 @@ def scrape_imovel(page, url: str, dados_card: dict, debug: bool = False) -> dict
             if raw:
                 bairro = raw.split(",")[0].strip()
                 break
+    # 3º fallback: extrair bairro do slug da URL
+    if not bairro:
+        slug = extrair_slug(url)
+        m_bairro = re.search(
+            r'(?:na-regiao-(?:do|da)|na-praia-de|no-bairro-(?:das?|dos?)|(?:no|na|em|nos|nas))'
+            r'-([a-z][a-z0-9]*(?:-[a-z0-9]+){0,4})(?:-\d+)?$',
+            slug
+        )
+        if m_bairro:
+            bairro = m_bairro.group(1).replace('-', ' ').title()
+            if debug:
+                log.debug(f"  bairro extraído do slug: '{bairro}'")
 
     # ── Flags ──────────────────────────────────────────────────────────────────
     desc_lower = (titulo + " " + descricao).lower()
@@ -517,6 +599,39 @@ def scrape_imovel(page, url: str, dados_card: dict, debug: bool = False) -> dict
 
     # ── POIs ───────────────────────────────────────────────────────────────────
     pois = extrair_pois(descricao) or None
+
+    # ── Extração via LLM (fallback para campos ainda nulos) ───────────────────
+    campos_nulos = (
+        quartos is None or suites is None or area_m2 is None
+        or not bairro or garagem is None
+    )
+    if campos_nulos and (titulo or descricao):
+        llm = extrair_com_llm(titulo or "", descricao or "")
+        if llm:
+            if quartos is None:
+                quartos = llm.get("quartos")
+            if suites is None:
+                suites = llm.get("suites")
+            if garagem is None:
+                garagem = llm.get("garagem")
+            if area_m2 is None:
+                area_m2 = llm.get("area_m2")
+            if not bairro:
+                bairro = llm.get("bairro")
+            if andar is None:
+                andar = llm.get("andar")
+            if not eh_terreo:
+                eh_terreo = bool(llm.get("eh_terreo")) or eh_terreo
+            if not eh_cobertura:
+                eh_cobertura = bool(llm.get("eh_cobertura")) or eh_cobertura
+            llm_carac = llm.get("caracteristicas") or []
+            llm_pois = llm.get("pois") or []
+            if llm_carac:
+                caracteristicas = list(set((caracteristicas or []) + llm_carac)) or None
+            if llm_pois:
+                pois = list(set((pois or []) + llm_pois)) or None
+            if debug:
+                log.debug(f"  LLM result: {llm}")
 
     # ── Fotos ──────────────────────────────────────────────────────────────────
     fotos = []
