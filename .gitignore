@@ -24,6 +24,9 @@ scraper/.venv/
 # Playwright
 scraper/playwright-state.json
 
+# Debug
+scraper/debug.log
+
 # OS
 .DS_Store
 Thumbs.db
