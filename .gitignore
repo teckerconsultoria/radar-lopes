@@ -31,3 +31,6 @@ Thumbs.db
 # Editor
 .vscode/
 *.swp
+
+# Claude Code
+.claude/settings.local.json
