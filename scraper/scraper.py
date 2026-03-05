@@ -73,7 +73,6 @@ HTTPX_HEADERS     = {
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
-
 ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
 LLM_MODEL      = "claude-haiku-4-5-20251001"
 LLM_MAX_TOKENS = 512
@@ -475,6 +474,22 @@ def _parse_imovel_html(html: str, url: str, dados_card: dict, idx: int, debug: b
         area_m2 = extrair_area(descricao)
 
     quartos = dados_card.get("quartos")
+
+    # Quartos: fallback via tabela extra-details da página
+    if quartos is None:
+        for li in soup.select("ul.extra-details li"):
+            label = li.select_one(".item-attr")
+            value = li.select_one(".item-property")
+            if label and value and "quarto" in label.get_text(strip=True).lower():
+                raw_q = value.get_text(strip=True)
+                m_q = re.search(r"\d+", raw_q)
+                if m_q:
+                    quartos = int(m_q.group())
+                if debug:
+                    log.debug(f"  quartos raw (extra-details)='{raw_q}' → quartos={quartos}")
+                break
+
+    # Quartos: fallback pela descrição
     if quartos is None and descricao:
         m = re.search(r"(\d+)\s*quartos?", descricao, re.IGNORECASE)
         if m:
@@ -510,6 +525,18 @@ def _parse_imovel_html(html: str, url: str, dados_card: dict, idx: int, debug: b
             if raw:
                 bairro = raw.split(",")[0].strip()
                 break
+    # 3º fallback: extrair bairro do slug da URL
+    if not bairro:
+        slug = extrair_slug(url)
+        m_bairro = re.search(
+            r'(?:na-regiao-(?:do|da)|na-praia-de|no-bairro-(?:das?|dos?)|(?:no|na|em|nos|nas))'
+            r'-([a-z][a-z0-9]*(?:-[a-z0-9]+){0,4})(?:-\d+)?$',
+            slug
+        )
+        if m_bairro:
+            bairro = m_bairro.group(1).replace('-', ' ').title()
+            if debug:
+                log.debug(f"  bairro extraído do slug: '{bairro}'")
 
     fotos = []
     for img in soup.select(
