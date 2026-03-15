@@ -75,6 +75,14 @@ export async function processMessage(
     );
 
     if (toolInput) {
+      // Extract tool_use block id safely
+      const toolUseBlock = response.content.find(
+        (b: { type: string }) => b.type === "tool_use"
+      ) as { id: string; type: string } | undefined;
+      if (!toolUseBlock) {
+        return { texto: "", imoveis: [], total: 0, filters: lastFilters };
+      }
+
       activeFilters = toolInput;
       const supabaseFilters = buildSupabaseFilters(toolInput);
       const result = await buscarImoveis(supabaseFilters, supabaseUrl, supabaseKey);
@@ -94,7 +102,7 @@ export async function processMessage(
             role: "user",
             content: [{
               type: "tool_result",
-              tool_use_id: (response.content.find((b: { type: string }) => b.type === "tool_use") as { id: string }).id,
+              tool_use_id: toolUseBlock.id,
               content: JSON.stringify({ total, sample: imoveis.slice(0, 3).map((i) => ({ titulo: i.titulo, bairro: i.bairro, preco: i.preco })) }),
             }],
           },
@@ -102,6 +110,9 @@ export async function processMessage(
       });
 
       finalText = (followUp.content.find((b: { type: string }) => b.type === "text") as { text: string } | undefined)?.text ?? "";
+      if (!finalText) {
+        finalText = `Encontrei ${total} imóvel${total !== 1 ? "is" : ""} com esses critérios.`;
+      }
     }
   } else {
     // Claude respondeu diretamente (pergunta de refinamento)
@@ -109,10 +120,19 @@ export async function processMessage(
   }
 
   // Salvar histórico atualizado (sliding window 20)
-  const updatedMessages = trimHistory([
-    ...messages,
-    { role: "assistant", content: finalText || response.content },
-  ]);
+  let assistantMessage: { role: string; content: unknown };
+  if (response.stop_reason === "tool_use" && finalText) {
+    // No branch tool_use: salvar a resposta final em texto
+    assistantMessage = { role: "assistant", content: finalText };
+  } else if (response.stop_reason !== "tool_use") {
+    // Resposta direta do Claude
+    assistantMessage = { role: "assistant", content: finalText };
+  } else {
+    // Fallback: ferramenta usada mas sem texto de resposta
+    assistantMessage = { role: "assistant", content: "Aqui estão os imóveis encontrados." };
+  }
+
+  const updatedMessages = trimHistory([...messages, assistantMessage]);
 
   await supabase.from("conversations").upsert(
     { chat_id: chatId, messages: updatedMessages, filters: activeFilters, updated_at: new Date().toISOString() },
