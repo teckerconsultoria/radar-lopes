@@ -118,7 +118,6 @@ export async function sendPhoto(
       chat_id: chatId,
       photo,
       caption,
-      parse_mode: "HTML",
       reply_markup: { inline_keyboard },
     });
   } else {
