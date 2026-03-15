@@ -107,7 +107,6 @@ export async function sendPhoto(
   const inline_keyboard = [
     [
       { text: "🔗 Ver anúncio", url: imovel.url },
-      { text: "❤️ Salvar", callback_data: `save:${encodeURIComponent(imovel.url)}` },
     ],
   ];
   if (showMore) {

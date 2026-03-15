@@ -80,9 +80,8 @@ Deno.serve(async (req: Request) => {
       }
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("Erro no webhook:", msg);
-    await sendText(TOKEN, chatId, `[DEBUG] ${msg}`);
+    console.error("Erro no webhook:", err instanceof Error ? err.message : String(err));
+    await sendText(TOKEN, chatId, "Desculpe, ocorreu um erro. Tente novamente em instantes.");
   }
 
   return new Response("OK");
