@@ -20,6 +20,7 @@ export interface ToolFilters {
   reformado?: boolean;
   caracteristicas?: string[];
   texto?: string;
+  modalidade?: "venda" | "aluguel";
   sort_by?: "recente" | "preco_asc" | "preco_desc" | "area_asc" | "area_desc";
 }
 
@@ -40,6 +41,7 @@ export interface SupabaseFilters {
   reformado?: boolean;
   caracteristicas?: string[];
   texto?: string;
+  modalidade?: "venda" | "aluguel";
   sortBy?: "recente" | "preco_asc" | "preco_desc" | "area_asc" | "area_desc";
 }
 
@@ -68,6 +70,7 @@ export function buildSupabaseFilters(toolInput: ToolFilters): SupabaseFilters {
     reformado:           toolInput.reformado,
     caracteristicas:     toolInput.caracteristicas,
     texto:               toolInput.texto,
+    modalidade:          toolInput.modalidade,
     sortBy:              toolInput.sort_by,
   };
 }
@@ -103,6 +106,7 @@ export async function buscarImoveis(
   if (filters.novo)                  query = query.eq("novo", true);
   if (filters.reformado)             query = query.eq("reformado", true);
   if (filters.caracteristicas?.length) query = query.overlaps("caracteristicas", filters.caracteristicas);
+  if (filters.modalidade)              query = query.eq("modalidade", filters.modalidade);
 
   switch (filters.sortBy) {
     case "preco_asc":  query = query.order("preco",          { ascending: true,  nullsFirst: false }); break;
@@ -142,6 +146,7 @@ export const BUSCAR_IMOVEIS_TOOL = {
       reformado:            { type: "boolean" },
       caracteristicas:      { type: "array", items: { type: "string" }, description: "Ex: ['piscina','academia']" },
       texto:                { type: "string", description: "Busca em texto livre" },
+      modalidade:           { type: "string", enum: ["venda", "aluguel"], description: "OBRIGATÓRIO: 'venda' para compra, 'aluguel' para locação" },
       sort_by:              { type: "string", enum: ["recente","preco_asc","preco_desc","area_asc","area_desc"] },
     },
   },
