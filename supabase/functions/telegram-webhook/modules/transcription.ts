@@ -12,6 +12,9 @@ export async function transcribeVoice(
   const audioRes = await fetch(audioUrl);
   if (!audioRes.ok) throw new Error(`Falha ao baixar áudio: ${audioRes.status}`);
   const audioBlob = await audioRes.blob();
+  if (audioBlob.size > 25_000_000) {
+    throw new Error("Áudio muito longo. Por favor, envie uma mensagem de voz mais curta.");
+  }
 
   // Montar form data para Whisper
   const formData = new FormData();

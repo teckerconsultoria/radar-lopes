@@ -39,7 +39,10 @@ export function parseUpdate(update: Record<string, unknown>): ParsedUpdate {
   }
   if (update.callback_query) {
     const cb = update.callback_query as Record<string, unknown>;
-    const chatId = (cb.from as Record<string, unknown>).id as number;
+    const msg = cb.message as Record<string, unknown> | undefined;
+    const chatId = msg
+      ? ((msg.chat as Record<string, unknown>).id as number)
+      : ((cb.from as Record<string, unknown>).id as number);
     const data = cb.data as string;
     if (data.startsWith("page:")) {
       return { type: "page", chatId, page: parseInt(data.split(":")[1]), callbackId: cb.id as string };
@@ -113,6 +116,7 @@ export async function sendPhoto(
       chat_id: chatId,
       photo,
       caption,
+      parse_mode: "HTML",
       reply_markup: { inline_keyboard },
     });
   } else {
@@ -131,6 +135,9 @@ export async function answerCallbackQuery(token: string, callbackId: string): Pr
 
 export async function getFileUrl(token: string, fileId: string): Promise<string> {
   const res = await fetch(`${TELEGRAM_API}/bot${token}/getFile?file_id=${fileId}`);
-  const data = await res.json() as { result: { file_path: string } };
+  const data = await res.json() as { ok: boolean; result?: { file_path: string } };
+  if (!data.ok || !data.result?.file_path) {
+    throw new Error(`Telegram getFile falhou para file_id=${fileId}`);
+  }
   return `${TELEGRAM_API}/file/bot${token}/${data.result.file_path}`;
 }

@@ -40,7 +40,7 @@ export interface SupabaseFilters {
   reformado?: boolean;
   caracteristicas?: string[];
   texto?: string;
-  sortBy?: string;
+  sortBy?: "recente" | "preco_asc" | "preco_desc" | "area_asc" | "area_desc";
 }
 
 // ── Mapeamento snake_case → camelCase ─────────────────────────────────────────
