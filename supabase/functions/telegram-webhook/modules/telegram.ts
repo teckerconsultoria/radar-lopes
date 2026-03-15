@@ -86,6 +86,7 @@ async function telegramPost(token: string, method: string, body: unknown): Promi
   if (!res.ok) {
     const err = await res.text();
     console.error(`Telegram ${method} error:`, err);
+    throw new Error(`Telegram ${method} falhou: ${err}`);
   }
 }
 
@@ -100,7 +101,8 @@ export async function sendPhoto(
   showMore: boolean,
   currentPage: number,
 ): Promise<void> {
-  const photo = imovel.fotos?.[0] ?? null;
+  // Ignorar placeholders genéricos (img_h.png) e usar primeira foto real
+  const photo = imovel.fotos?.find((f) => !f.includes("img_h")) ?? null;
   const caption = formatCaption(imovel);
   const inline_keyboard = [
     [
