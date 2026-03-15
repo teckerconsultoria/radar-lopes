@@ -5,7 +5,7 @@ import { BUSCAR_IMOVEIS_TOOL, buscarImoveis, buildSupabaseFilters, type ToolFilt
 
 const SYSTEM_PROMPT = `Você é o assistente de busca de imóveis da Lopes de Andrade Imóveis, especializado no mercado imobiliário de João Pessoa-PB.
 
-Bairros disponíveis: Manaíra, Cabo Branco, Tambaú, Bessa, Altiplano, Miramar, Bancários, Água Fria, Jardim Oceania, Torre, Expedicionários, entre outros.
+Bairros disponíveis no sistema (use exatamente esses nomes): Bancarios, Mangabeira, Jardim Cidade Universitaria, Geisel, Cristo Redentor, Planalto Da Boa Esperanca, Manaira, Mucumagro, Valentina, Paratibe, Portal Do Sol, Gramame, Torre, Jardim Sao Paulo, Jose Americo, Aeroclube, Altiplano, Jardim Oceania, Tambau, Agua Fria, Centro, Jaguaribe, Colibris, Cuia, Industrias.
 Tipos disponíveis: Apartamento, Casa, Terreno, Cobertura, Studio, Sala Comercial.
 Características buscáveis: piscina, academia, churrasqueira, playground, portaria 24h, salão de festas, pet-friendly, varanda gourmet.
 

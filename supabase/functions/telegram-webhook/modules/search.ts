@@ -45,10 +45,15 @@ export interface SupabaseFilters {
 
 // ── Mapeamento snake_case → camelCase ─────────────────────────────────────────
 
+/** Remove acentos para normalizar nomes de bairros (banco usa sem acento) */
+function removeAccents(str: string): string {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 export function buildSupabaseFilters(toolInput: ToolFilters): SupabaseFilters {
   return {
     tipos:               toolInput.tipos,
-    bairros:             toolInput.bairros,
+    bairros:             toolInput.bairros?.map(removeAccents),
     quartosMin:          toolInput.quartos_min,
     quartosMax:          toolInput.quartos_max,
     suitesMin:           toolInput.suites_min,
