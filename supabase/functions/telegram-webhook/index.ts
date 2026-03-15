@@ -61,7 +61,6 @@ Deno.serve(async (req: Request) => {
     if (parsed.type === "voice") {
       const fileUrl = await getFileUrl(TOKEN, parsed.fileId);
       userText = await transcribeVoice(fileUrl, WHISPER_KEY, WHISPER_PROVIDER);
-      await sendText(TOKEN, chatId, `🎙️ _"${userText}"_`);
     } else {
       userText = parsed.text;
     }
