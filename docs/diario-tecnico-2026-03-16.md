@@ -240,3 +240,54 @@ Corretor (áudio)  →  Whisper  →  Claude (busca)  →  TTS (resumo rico)
                                                   →  aguarda "sim"
                                                   →  cards enviados
 ```
+
+---
+
+## 7. Disponibilidade Contínua — GitHub Actions Keep-Alive
+
+### Problema
+
+O plano Free do Supabase pausa automaticamente projetos sem atividade por 7 dias, derrubando banco e Edge Functions.
+
+### Solução implementada
+
+Workflow GitHub Actions (`.github/workflows/keep-alive.yml`) com cron a cada 5 dias que faz um `GET` inócuo na REST API do Supabase:
+
+```yaml
+on:
+  schedule:
+    - cron: "0 9 1,6,11,16,21,26 * *"  # dias 1,6,11,16,21,26 às 9h UTC
+  workflow_dispatch:                     # disparo manual disponível
+```
+
+**Request de ping:**
+```
+GET /rest/v1/imoveis?select=id&limit=1
+Headers: apikey + Authorization (anon key)
+```
+
+Resposta HTTP 200 confirma que banco e projeto estão ativos. O job falha (exit 1) se receber status ≥ 400, alertando via GitHub.
+
+### Configuração
+
+Secrets configurados via GitHub CLI (`gh secret set`):
+
+| Secret | Valor |
+|---|---|
+| `SUPABASE_URL` | `https://efwlpprsuygnhzksvibq.supabase.co` |
+| `SUPABASE_ANON_KEY` | anon key JWT do projeto |
+
+### Validação
+
+Disparo manual executado com sucesso: job `ping` concluído em **4s** com status ✓.
+
+---
+
+## 8. Commits finais do dia
+
+| Hash | Descrição |
+|---|---|
+| `c557b14` | feat(enriquecimento): migration + enrich_imoveis.py + filtro mobiliado + sample expandida |
+| `b4588db` | feat(telegram-bot): resposta em áudio rica + dados enriquecidos nos cards |
+| `ef9a567` | docs: diário técnico 2026-03-16 |
+| `57c0fd3` | ci: keep-alive cron para evitar pausa do Supabase Free |
