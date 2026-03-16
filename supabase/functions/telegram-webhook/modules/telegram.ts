@@ -69,6 +69,22 @@ function formatPreco(value: number): string {
   return "R$ " + value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
+/**
+ * Limpa endereço vindo do Google Maps (formato BR):
+ * "Rua X, Bairro, João Pessoa - Paraíba, CEP, Brasil" → "Rua X, Bairro"
+ * "Bairro, CEP, João Pessoa, Paraíba, Brasil"         → null (redundante com header)
+ */
+function cleanEndereco(raw: string): string | null {
+  const s = raw
+    .replace(/,?\s*João Pessoa.*$/i, "")    // corta a partir da cidade
+    .replace(/,?\s*\d{5}-?\d{0,3}\s*$/, "") // remove CEP residual no final
+    .trim()
+    .replace(/,\s*$/, "")
+    .trim();
+  // Só exibe se tiver vírgula (rua + bairro); bairro isolado já aparece no header
+  return s.includes(",") ? s : null;
+}
+
 export function formatCaption(imovel: Imovel): string {
   const preco = imovel.preco ? formatPreco(imovel.preco) : "Consulte";
   const detalhes = [
@@ -78,13 +94,14 @@ export function formatCaption(imovel: Imovel): string {
     imovel.area_m2 != null ? `📐 ${imovel.area_m2}m²` : null,
   ].filter(Boolean).join(" · ");
 
-  // Endereço truncado
+  // Endereço: limpa ruído de cidade/estado/país e trunca em 80 chars
   let enderecoLine: string | null = null;
   if (imovel.endereco) {
-    const end = imovel.endereco.length > 60
-      ? imovel.endereco.slice(0, 59) + "…"
-      : imovel.endereco;
-    enderecoLine = `🗺 ${end}`;
+    const clean = cleanEndereco(imovel.endereco);
+    if (clean) {
+      const end = clean.length > 80 ? clean.slice(0, 79) + "…" : clean;
+      enderecoLine = `🗺 ${end}`;
+    }
   }
 
   // Preço + condomínio inline

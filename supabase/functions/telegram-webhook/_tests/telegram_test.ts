@@ -94,10 +94,31 @@ Deno.test("formatCaption - exibe endereco quando presente", () => {
     preco: 500000,
     fotos: null,
     url: "https://lopesdeandrade.com.br/imovel/123",
-    endereco: "Rua das Flores, 123",
+    // Formato Google Maps completo: deve ser limpo e exibir apenas rua + bairro
+    endereco: "Rua das Flores, Manaíra, João Pessoa - Paraíba, 58038-000, Brasil",
   };
   const caption = formatCaption(imovel);
-  assertEquals(caption.includes("🗺 Rua das Flores, 123"), true);
+  assertEquals(caption.includes("🗺 Rua das Flores, Manaíra"), true);
+  assertEquals(caption.includes("João Pessoa"), false);
+});
+
+Deno.test("formatCaption - omite endereco que e apenas bairro", () => {
+  const imovel = {
+    titulo: "Apto Bancários",
+    bairro: "Bancarios",
+    tipo: "Apartamento",
+    quartos: 2,
+    suites: null,
+    garagem: 1,
+    area_m2: 52,
+    preco: 295000,
+    fotos: null,
+    url: "https://lopesdeandrade.com.br/imovel/xyz",
+    // Endereço geocodificado sem rua: deve ser omitido (redundante com header)
+    endereco: "Bancários, 58051, João Pessoa, Paraíba, Brasil",
+  };
+  const caption = formatCaption(imovel);
+  assertEquals(caption.includes("🗺"), false);
 });
 
 Deno.test("formatCaption - omite linha endereco quando null", () => {
@@ -178,14 +199,16 @@ Deno.test("formatCaption - trunca endereco longo", () => {
     preco: 200000,
     fotos: null,
     url: "https://lopesdeandrade.com.br/imovel/trunc",
-    endereco: "Avenida Presidente Epitácio Pessoa, número 1500, Bloco B, Apartamento 402",
+    // Endereço com rua longa (tem vírgula → passa cleanEndereco), mas > 80 chars
+    endereco: "Avenida Presidente Epitácio Pessoa, número 1500, Bloco B, Apartamento 402, Manaíra",
   };
   const caption = formatCaption(imovel);
   assertEquals(caption.includes("🗺"), true);
   const lines = caption.split("\n");
   const endLine = lines.find((l) => l.startsWith("🗺"));
   assertEquals(endLine !== undefined, true);
-  assertEquals(endLine!.length <= 65, true);
+  // "🗺 " (3 chars) + até 80 chars + "…" (1) = máximo 84
+  assertEquals(endLine!.length <= 84, true);
 });
 
 Deno.test("formatCaption - caption nao excede 1024 chars", () => {

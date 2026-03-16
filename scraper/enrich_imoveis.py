@@ -49,7 +49,9 @@ SYSTEM_PROMPT = (
     "Regras:\n"
     "- Use null para campos não mencionados ou incertos\n"
     "- Omita chaves com arrays vazios\n"
-    "- Não repita dados estruturais (quartos, área, preço, bairro)\n"
+    "- Não repita dados estruturais (quartos, suítes, garagem, área, preço, bairro, tipo) em nenhum array\n"
+    "- localizacao_detalhes: apenas referências geográficas externas (ex: 'a 200m da praia', 'próximo ao shopping'); NUNCA o nome do bairro\n"
+    "- observacoes_extras: apenas informações financeiras (IPTU, taxas) e observações únicas não cobertas pelos outros campos\n"
     "- Seja conciso: máximo 8 itens por array"
 )
 
