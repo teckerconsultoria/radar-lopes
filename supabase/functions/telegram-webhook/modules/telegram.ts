@@ -15,7 +15,9 @@ export interface Imovel {
   titulo: string;
   tipo: string | null;
   bairro: string | null;
+  endereco?: string | null;
   preco: number | null;
+  valor_condominio?: number | null;
   area_m2: number | null;
   quartos: number | null;
   suites: number | null;
@@ -25,6 +27,10 @@ export interface Imovel {
   detalhes_imovel?: {
     estado_imovel?: string | null;
     diferenciais?: string[] | null;
+    acabamentos?: string[] | null;
+    condominio?: string[] | null;
+    localizacao_detalhes?: string[] | null;
+    observacoes_extras?: string[] | null;
   } | null;
 }
 
@@ -72,6 +78,22 @@ export function formatCaption(imovel: Imovel): string {
     imovel.area_m2 != null ? `📐 ${imovel.area_m2}m²` : null,
   ].filter(Boolean).join(" · ");
 
+  // Endereço truncado
+  let enderecoLine: string | null = null;
+  if (imovel.endereco) {
+    const end = imovel.endereco.length > 60
+      ? imovel.endereco.slice(0, 57) + "…"
+      : imovel.endereco;
+    enderecoLine = `🗺 ${end}`;
+  }
+
+  // Preço + condomínio inline
+  const condLabel = imovel.valor_condominio
+    ? `  |  🏢 Cond. ${formatPreco(imovel.valor_condominio)}`
+    : "";
+  const precoLine = `💰 ${preco}${condLabel}`;
+
+  // Estado + mobiliado
   const estadoEmoji: Record<string, string> = {
     "novo": "🆕",
     "reformado": "🔨",
@@ -79,21 +101,40 @@ export function formatCaption(imovel: Imovel): string {
     "precisa reforma": "🛠️",
   };
   const estado = imovel.detalhes_imovel?.estado_imovel;
-  const estadoLabel = estado ? `${estadoEmoji[estado] ?? "🏷️"} ${estado.charAt(0).toUpperCase() + estado.slice(1)}` : null;
-  const diferenciais = imovel.detalhes_imovel?.diferenciais?.slice(0, 2).join(" · ") ?? null;
+  const estadoLabel = estado
+    ? `${estadoEmoji[estado] ?? "🏷️"} ${estado.charAt(0).toUpperCase() + estado.slice(1)}`
+    : null;
   const extras = [
     imovel.mobiliado === true ? "✅ Mobiliado" : null,
     estadoLabel,
-    diferenciais,
   ].filter(Boolean).join("  ");
 
-  return [
+  // Dados enriquecidos
+  const diferenciais = imovel.detalhes_imovel?.diferenciais?.join(" · ") ?? null;
+  const acabamentos = imovel.detalhes_imovel?.acabamentos?.slice(0, 3).join(" · ") ?? null;
+  const amenidades = imovel.detalhes_imovel?.condominio?.slice(0, 3).join(" · ") ?? null;
+  const localizacao = imovel.detalhes_imovel?.localizacao_detalhes?.slice(0, 2).join(" · ") ?? null;
+  const observacoes = imovel.detalhes_imovel?.observacoes_extras?.slice(0, 3).join(" · ") ?? null;
+
+  const caption = [
     `🏠 ${imovel.titulo}`,
     `📍 ${imovel.bairro ?? "—"} · ${imovel.tipo ?? "—"}`,
-    detalhes,
-    `💰 ${preco}`,
+    enderecoLine,
+    detalhes || null,
+    precoLine,
     extras || null,
+    diferenciais ? `🌟 ${diferenciais}` : null,
+    acabamentos ? `🪟 ${acabamentos}` : null,
+    amenidades ? `🏊 ${amenidades}` : null,
+    localizacao ? `📌 ${localizacao}` : null,
+    observacoes ? `📝 ${observacoes}` : null,
   ].filter(Boolean).join("\n");
+
+  // Fallback: truncar se exceder 1020 chars
+  if (caption.length > 1020) {
+    return caption.slice(0, 1020) + "…";
+  }
+  return caption;
 }
 
 // ── Telegram API ──────────────────────────────────────────────────────────────
