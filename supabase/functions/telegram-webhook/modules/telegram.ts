@@ -15,7 +15,9 @@ export interface Imovel {
   titulo: string;
   tipo: string | null;
   bairro: string | null;
+  endereco?: string | null;
   preco: number | null;
+  valor_condominio?: number | null;
   area_m2: number | null;
   quartos: number | null;
   suites: number | null;
@@ -25,6 +27,10 @@ export interface Imovel {
   detalhes_imovel?: {
     estado_imovel?: string | null;
     diferenciais?: string[] | null;
+    acabamentos?: string[] | null;
+    condominio?: string[] | null;
+    localizacao_detalhes?: string[] | null;
+    observacoes_extras?: string[] | null;
   } | null;
 }
 
@@ -63,6 +69,22 @@ function formatPreco(value: number): string {
   return "R$ " + value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
+/**
+ * Limpa endereço vindo do Google Maps (formato BR):
+ * "Rua X, Bairro, João Pessoa - Paraíba, CEP, Brasil" → "Rua X, Bairro"
+ * "Bairro, CEP, João Pessoa, Paraíba, Brasil"         → null (redundante com header)
+ */
+function cleanEndereco(raw: string): string | null {
+  const s = raw
+    .replace(/,?\s*João Pessoa.*$/i, "")    // corta a partir da cidade
+    .replace(/,?\s*\d{5}-?\d{0,3}\s*$/, "") // remove CEP residual no final
+    .trim()
+    .replace(/,\s*$/, "")
+    .trim();
+  // Só exibe se tiver vírgula (rua + bairro); bairro isolado já aparece no header
+  return s.includes(",") ? s : null;
+}
+
 export function formatCaption(imovel: Imovel): string {
   const preco = imovel.preco ? formatPreco(imovel.preco) : "Consulte";
   const detalhes = [
@@ -72,6 +94,23 @@ export function formatCaption(imovel: Imovel): string {
     imovel.area_m2 != null ? `📐 ${imovel.area_m2}m²` : null,
   ].filter(Boolean).join(" · ");
 
+  // Endereço: limpa ruído de cidade/estado/país e trunca em 80 chars
+  let enderecoLine: string | null = null;
+  if (imovel.endereco) {
+    const clean = cleanEndereco(imovel.endereco);
+    if (clean) {
+      const end = clean.length > 80 ? clean.slice(0, 79) + "…" : clean;
+      enderecoLine = `🗺 ${end}`;
+    }
+  }
+
+  // Preço + condomínio inline
+  const condLabel = imovel.valor_condominio
+    ? `  |  🏢 Cond. ${formatPreco(imovel.valor_condominio)}`
+    : "";
+  const precoLine = `💰 ${preco}${condLabel}`;
+
+  // Estado + mobiliado
   const estadoEmoji: Record<string, string> = {
     "novo": "🆕",
     "reformado": "🔨",
@@ -79,21 +118,40 @@ export function formatCaption(imovel: Imovel): string {
     "precisa reforma": "🛠️",
   };
   const estado = imovel.detalhes_imovel?.estado_imovel;
-  const estadoLabel = estado ? `${estadoEmoji[estado] ?? "🏷️"} ${estado.charAt(0).toUpperCase() + estado.slice(1)}` : null;
-  const diferenciais = imovel.detalhes_imovel?.diferenciais?.slice(0, 2).join(" · ") ?? null;
+  const estadoLabel = estado
+    ? `${estadoEmoji[estado] ?? "🏷️"} ${estado.charAt(0).toUpperCase() + estado.slice(1)}`
+    : null;
   const extras = [
     imovel.mobiliado === true ? "✅ Mobiliado" : null,
     estadoLabel,
-    diferenciais,
   ].filter(Boolean).join("  ");
 
-  return [
+  // Dados enriquecidos
+  const diferenciais = imovel.detalhes_imovel?.diferenciais?.join(" · ") ?? null;
+  const acabamentos = imovel.detalhes_imovel?.acabamentos?.slice(0, 3).join(" · ") ?? null;
+  const amenidades = imovel.detalhes_imovel?.condominio?.slice(0, 3).join(" · ") ?? null;
+  const localizacao = imovel.detalhes_imovel?.localizacao_detalhes?.slice(0, 2).join(" · ") ?? null;
+  const observacoes = imovel.detalhes_imovel?.observacoes_extras?.slice(0, 3).join(" · ") ?? null;
+
+  const caption = [
     `🏠 ${imovel.titulo}`,
     `📍 ${imovel.bairro ?? "—"} · ${imovel.tipo ?? "—"}`,
-    detalhes,
-    `💰 ${preco}`,
+    enderecoLine,
+    detalhes || null,
+    precoLine,
     extras || null,
+    diferenciais ? `🌟 ${diferenciais}` : null,
+    acabamentos ? `🪟 ${acabamentos}` : null,
+    amenidades ? `🏊 ${amenidades}` : null,
+    localizacao ? `📌 ${localizacao}` : null,
+    observacoes ? `📝 ${observacoes}` : null,
   ].filter(Boolean).join("\n");
+
+  // Fallback: truncar se exceder 1020 chars
+  if (caption.length > 1020) {
+    return caption.slice(0, 1020) + "…";
+  }
+  return caption;
 }
 
 // ── Telegram API ──────────────────────────────────────────────────────────────

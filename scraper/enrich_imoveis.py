@@ -49,12 +49,15 @@ SYSTEM_PROMPT = (
     "Regras:\n"
     "- Use null para campos não mencionados ou incertos\n"
     "- Omita chaves com arrays vazios\n"
-    "- Não repita dados estruturais (quartos, área, preço, bairro)\n"
+    "- Não repita dados estruturais (quartos, suítes, garagem, área, preço, bairro, tipo) em nenhum array\n"
+    "- localizacao_detalhes: apenas referências geográficas externas (ex: 'a 200m da praia', 'próximo ao shopping'); NUNCA o nome do bairro\n"
+    "- observacoes_extras: apenas informações financeiras (IPTU, taxas) e observações únicas não cobertas pelos outros campos\n"
     "- Seja conciso: máximo 8 itens por array"
 )
 
 DETALHES_FALLBACK = {
     "mobiliado": None,
+    "valor_condominio": None,
     "detalhes_imovel": None,
 }
 
@@ -89,6 +92,7 @@ def montar_user_prompt(titulo: str, descricao: str) -> str:
         'Retorne JSON com exatamente estas chaves:\n'
         '{\n'
         '  "mobiliado": true|false|null,\n'
+        '  "valor_condominio": 600.0,\n'
         '  "detalhes_imovel": {\n'
         '    "estado_imovel": "novo"|"reformado"|"bem conservado"|"precisa reforma"|null,\n'
         '    "diferenciais": ["sol da manhã", "andar alto", "vista mar", ...],\n'
@@ -114,6 +118,34 @@ def parsear_resposta(raw: str) -> dict:
     if not isinstance(mobiliado, bool):
         mobiliado = None
 
+    # Extrai valor_condominio como número positivo
+    valor_cond_raw = resultado.get("valor_condominio")
+    if isinstance(valor_cond_raw, (int, float)) and valor_cond_raw > 0:
+        valor_cond = float(valor_cond_raw)
+    elif isinstance(valor_cond_raw, str):
+        try:
+            s = re.sub(r"[^\d,.]", "", valor_cond_raw)
+            if not s:
+                valor_cond = None
+            elif "," in s:
+                # Formato BR: ponto é milhar, vírgula é decimal → "1.200,50" → 1200.5
+                s = s.replace(".", "").replace(",", ".")
+                parsed = float(s)
+                valor_cond = parsed if parsed > 0 else None
+            elif re.match(r"^\d{1,3}(\.\d{3})+$", s):
+                # Ponto de milhar sem centavos → "1.200" → 1200.0
+                s = s.replace(".", "")
+                parsed = float(s)
+                valor_cond = parsed if parsed > 0 else None
+            else:
+                # Decimal normal → "600.50" → 600.5
+                parsed = float(s)
+                valor_cond = parsed if parsed > 0 else None
+        except (ValueError, TypeError):
+            valor_cond = None
+    else:
+        valor_cond = None
+
     detalhes_raw = resultado.get("detalhes_imovel") or {}
     if not isinstance(detalhes_raw, dict):
         detalhes_raw = {}
@@ -136,7 +168,8 @@ def parsear_resposta(raw: str) -> dict:
             detalhes[chave] = val
 
     return {
-        "mobiliado":      mobiliado,
+        "mobiliado":       mobiliado,
+        "valor_condominio": valor_cond,
         "detalhes_imovel": detalhes if detalhes else None,
     }
 
@@ -205,8 +238,9 @@ def atualizar_imovel(supabase: Client, imovel_id: str, dados: dict) -> bool:
     """Atualiza detalhes_imovel e mobiliado pelo id."""
     try:
         supabase.table("imoveis").update({
-            "detalhes_imovel": dados["detalhes_imovel"],
-            "mobiliado":       dados["mobiliado"],
+            "detalhes_imovel":  dados["detalhes_imovel"],
+            "mobiliado":        dados["mobiliado"],
+            "valor_condominio": dados["valor_condominio"],
         }).eq("id", imovel_id).execute()
         return True
     except Exception as e:

@@ -81,3 +81,159 @@ Deno.test("formatCaption - preço nulo não quebra", () => {
   const caption = formatCaption(imovel);
   assertEquals(caption.includes("💰 Consulte"), true);
 });
+
+Deno.test("formatCaption - exibe endereco quando presente", () => {
+  const imovel = {
+    titulo: "Apto Manaíra",
+    bairro: "Manaíra",
+    tipo: "Apartamento",
+    quartos: 3,
+    suites: 1,
+    garagem: 1,
+    area_m2: 90,
+    preco: 500000,
+    fotos: null,
+    url: "https://lopesdeandrade.com.br/imovel/123",
+    // Formato Google Maps completo: deve ser limpo e exibir apenas rua + bairro
+    endereco: "Rua das Flores, Manaíra, João Pessoa - Paraíba, 58038-000, Brasil",
+  };
+  const caption = formatCaption(imovel);
+  assertEquals(caption.includes("🗺 Rua das Flores, Manaíra"), true);
+  assertEquals(caption.includes("João Pessoa"), false);
+});
+
+Deno.test("formatCaption - omite endereco que e apenas bairro", () => {
+  const imovel = {
+    titulo: "Apto Bancários",
+    bairro: "Bancarios",
+    tipo: "Apartamento",
+    quartos: 2,
+    suites: null,
+    garagem: 1,
+    area_m2: 52,
+    preco: 295000,
+    fotos: null,
+    url: "https://lopesdeandrade.com.br/imovel/xyz",
+    // Endereço geocodificado sem rua: deve ser omitido (redundante com header)
+    endereco: "Bancários, 58051, João Pessoa, Paraíba, Brasil",
+  };
+  const caption = formatCaption(imovel);
+  assertEquals(caption.includes("🗺"), false);
+});
+
+Deno.test("formatCaption - omite linha endereco quando null", () => {
+  const imovel = {
+    titulo: "Apto Bessa",
+    bairro: "Bessa",
+    tipo: "Apartamento",
+    quartos: 2,
+    suites: null,
+    garagem: null,
+    area_m2: 70,
+    preco: 300000,
+    fotos: null,
+    url: "https://lopesdeandrade.com.br/imovel/456",
+    endereco: null,
+  };
+  const caption = formatCaption(imovel);
+  assertEquals(caption.includes("🗺"), false);
+});
+
+Deno.test("formatCaption - exibe condominio inline com preco", () => {
+  const imovel = {
+    titulo: "Apto Cabo Branco",
+    bairro: "Cabo Branco",
+    tipo: "Apartamento",
+    quartos: 3,
+    suites: 1,
+    garagem: 2,
+    area_m2: 100,
+    preco: 750000,
+    fotos: null,
+    url: "https://lopesdeandrade.com.br/imovel/789",
+    valor_condominio: 600,
+  };
+  const caption = formatCaption(imovel);
+  assertEquals(caption.includes("🏢 Cond."), true);
+  assertEquals(caption.includes("R$ 600"), true);
+});
+
+Deno.test("formatCaption - exibe acabamentos e amenidades", () => {
+  const imovel = {
+    titulo: "Apto Tambaú",
+    bairro: "Tambaú",
+    tipo: "Apartamento",
+    quartos: 3,
+    suites: 2,
+    garagem: 2,
+    area_m2: 120,
+    preco: 900000,
+    fotos: null,
+    url: "https://lopesdeandrade.com.br/imovel/abc",
+    detalhes_imovel: {
+      acabamentos: ["piso porcelanato", "cozinha planejada", "ar-condicionado"],
+      condominio: ["piscina", "academia", "portaria 24h"],
+      localizacao_detalhes: ["a 200m da praia"],
+      observacoes_extras: ["IPTU R$ 120/mês"],
+    },
+  };
+  const caption = formatCaption(imovel);
+  assertEquals(caption.includes("🪟"), true);
+  assertEquals(caption.includes("piso porcelanato"), true);
+  assertEquals(caption.includes("🏊"), true);
+  assertEquals(caption.includes("piscina"), true);
+  assertEquals(caption.includes("📌"), true);
+  assertEquals(caption.includes("📝"), true);
+  assertEquals(caption.includes("IPTU R$ 120/mês"), true);
+});
+
+Deno.test("formatCaption - trunca endereco longo", () => {
+  const imovel = {
+    titulo: "Apto",
+    bairro: "Bairro",
+    tipo: "Apartamento",
+    quartos: 2,
+    suites: null,
+    garagem: null,
+    area_m2: 60,
+    preco: 200000,
+    fotos: null,
+    url: "https://lopesdeandrade.com.br/imovel/trunc",
+    // Endereço com rua longa (tem vírgula → passa cleanEndereco), mas > 80 chars
+    endereco: "Avenida Presidente Epitácio Pessoa, número 1500, Bloco B, Apartamento 402, Manaíra",
+  };
+  const caption = formatCaption(imovel);
+  assertEquals(caption.includes("🗺"), true);
+  const lines = caption.split("\n");
+  const endLine = lines.find((l) => l.startsWith("🗺"));
+  assertEquals(endLine !== undefined, true);
+  // "🗺 " (3 chars) + até 80 chars + "…" (1) = máximo 84
+  assertEquals(endLine!.length <= 84, true);
+});
+
+Deno.test("formatCaption - caption nao excede 1024 chars", () => {
+  const imovel = {
+    titulo: "Título muito longo ".repeat(10),
+    bairro: "Bairro",
+    tipo: "Apartamento",
+    quartos: 4,
+    suites: 3,
+    garagem: 3,
+    area_m2: 200,
+    preco: 1500000,
+    fotos: null,
+    valor_condominio: 1200,
+    url: "https://lopesdeandrade.com.br/imovel/long",
+    endereco: "Rua muito longa mesmo de verdade, número 9999, Apartamento 101",
+    detalhes_imovel: {
+      estado_imovel: "reformado",
+      diferenciais: ["sol da manhã", "vista mar", "andar alto"],
+      acabamentos: ["piso porcelanato", "cozinha planejada", "ar-condicionado"],
+      condominio: ["piscina", "academia", "portaria 24h"],
+      localizacao_detalhes: ["a 200m da praia", "próximo ao shopping"],
+      observacoes_extras: ["IPTU R$ 200/mês", "semi-mobiliado", "pronto para morar"],
+    },
+  };
+  const caption = formatCaption(imovel);
+  assertEquals(caption.length <= 1024, true);
+});

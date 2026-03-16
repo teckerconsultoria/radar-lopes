@@ -14,6 +14,8 @@ export interface ToolFilters {
   preco_max?: number;
   area_min?: number;
   area_max?: number;
+  valor_condominio_min?: number;
+  valor_condominio_max?: number;
   eh_terreo?: boolean;
   aceita_financiamento?: boolean;
   novo?: boolean;
@@ -36,6 +38,8 @@ export interface SupabaseFilters {
   precoMax?: number;
   areaMin?: number;
   areaMax?: number;
+  valorCondominioMin?: number;
+  valorCondominioMax?: number;
   ehTerreo?: boolean;
   aceitaFinanciamento?: boolean;
   novo?: boolean;
@@ -66,6 +70,8 @@ export function buildSupabaseFilters(toolInput: ToolFilters): SupabaseFilters {
     precoMax:            toolInput.preco_max,
     areaMin:             toolInput.area_min,
     areaMax:             toolInput.area_max,
+    valorCondominioMin:  toolInput.valor_condominio_min,
+    valorCondominioMax:  toolInput.valor_condominio_max,
     ehTerreo:            toolInput.eh_terreo,
     aceitaFinanciamento: toolInput.aceita_financiamento,
     novo:                toolInput.novo,
@@ -100,10 +106,12 @@ export async function buscarImoveis(
   if (filters.quartosMax != null)    query = query.lte("quartos", filters.quartosMax);
   if (filters.suitesMin != null)     query = query.gte("suites", filters.suitesMin);
   if (filters.garagemMin != null)    query = query.gte("garagem", filters.garagemMin);
-  if (filters.precoMin != null)      query = query.gte("preco", filters.precoMin);
-  if (filters.precoMax != null)      query = query.lte("preco", filters.precoMax);
-  if (filters.areaMin != null)       query = query.gte("area_m2", filters.areaMin);
-  if (filters.areaMax != null)       query = query.lte("area_m2", filters.areaMax);
+  if (filters.precoMin != null)            query = query.gte("preco", filters.precoMin);
+  if (filters.precoMax != null)            query = query.lte("preco", filters.precoMax);
+  if (filters.areaMin != null)             query = query.gte("area_m2", filters.areaMin);
+  if (filters.areaMax != null)             query = query.lte("area_m2", filters.areaMax);
+  if (filters.valorCondominioMin != null)  query = query.gte("valor_condominio", filters.valorCondominioMin);
+  if (filters.valorCondominioMax != null)  query = query.lte("valor_condominio", filters.valorCondominioMax);
   if (filters.ehTerreo)              query = query.eq("eh_terreo", true);
   if (filters.aceitaFinanciamento)   query = query.eq("aceita_financiamento", true);
   if (filters.novo)                  query = query.eq("novo", true);
@@ -140,10 +148,12 @@ export const BUSCAR_IMOVEIS_TOOL = {
       quartos_max:          { type: "integer" },
       suites_min:           { type: "integer" },
       garagem_min:          { type: "integer" },
-      preco_min:            { type: "number", description: "Preço mínimo em R$" },
+      preco_min:            { type: "number", description: "Preço mínimo em R$ (aluguel mensal ou preço de venda)" },
       preco_max:            { type: "number", description: "Preço máximo em R$" },
       area_min:             { type: "number", description: "Área mínima em m²" },
       area_max:             { type: "number", description: "Área máxima em m²" },
+      valor_condominio_min: { type: "number", description: "Valor mínimo do condomínio em R$/mês (campo nullable — só filtra imóveis que têm esse dado)" },
+      valor_condominio_max: { type: "number", description: "Valor máximo do condomínio em R$/mês" },
       eh_terreo:            { type: "boolean" },
       aceita_financiamento: { type: "boolean" },
       novo:                 { type: "boolean" },
