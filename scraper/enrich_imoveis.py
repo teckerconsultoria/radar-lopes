@@ -55,6 +55,7 @@ SYSTEM_PROMPT = (
 
 DETALHES_FALLBACK = {
     "mobiliado": None,
+    "valor_condominio": None,
     "detalhes_imovel": None,
 }
 
@@ -89,6 +90,7 @@ def montar_user_prompt(titulo: str, descricao: str) -> str:
         'Retorne JSON com exatamente estas chaves:\n'
         '{\n'
         '  "mobiliado": true|false|null,\n'
+        '  "valor_condominio": 600.0,\n'
         '  "detalhes_imovel": {\n'
         '    "estado_imovel": "novo"|"reformado"|"bem conservado"|"precisa reforma"|null,\n'
         '    "diferenciais": ["sol da manhã", "andar alto", "vista mar", ...],\n'
@@ -114,6 +116,20 @@ def parsear_resposta(raw: str) -> dict:
     if not isinstance(mobiliado, bool):
         mobiliado = None
 
+    # Extrai valor_condominio como número positivo
+    valor_cond_raw = resultado.get("valor_condominio")
+    if isinstance(valor_cond_raw, (int, float)) and valor_cond_raw > 0:
+        valor_cond = float(valor_cond_raw)
+    elif isinstance(valor_cond_raw, str):
+        try:
+            cleaned = re.sub(r"[^\d.,]", "", valor_cond_raw).replace(",", ".")
+            parsed = float(cleaned) if cleaned else 0
+            valor_cond = parsed if parsed > 0 else None
+        except (ValueError, TypeError):
+            valor_cond = None
+    else:
+        valor_cond = None
+
     detalhes_raw = resultado.get("detalhes_imovel") or {}
     if not isinstance(detalhes_raw, dict):
         detalhes_raw = {}
@@ -136,7 +152,8 @@ def parsear_resposta(raw: str) -> dict:
             detalhes[chave] = val
 
     return {
-        "mobiliado":      mobiliado,
+        "mobiliado":       mobiliado,
+        "valor_condominio": valor_cond,
         "detalhes_imovel": detalhes if detalhes else None,
     }
 
@@ -205,8 +222,9 @@ def atualizar_imovel(supabase: Client, imovel_id: str, dados: dict) -> bool:
     """Atualiza detalhes_imovel e mobiliado pelo id."""
     try:
         supabase.table("imoveis").update({
-            "detalhes_imovel": dados["detalhes_imovel"],
-            "mobiliado":       dados["mobiliado"],
+            "detalhes_imovel":  dados["detalhes_imovel"],
+            "mobiliado":        dados["mobiliado"],
+            "valor_condominio": dados["valor_condominio"],
         }).eq("id", imovel_id).execute()
         return True
     except Exception as e:
