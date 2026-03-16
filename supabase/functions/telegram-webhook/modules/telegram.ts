@@ -82,7 +82,7 @@ export function formatCaption(imovel: Imovel): string {
   let enderecoLine: string | null = null;
   if (imovel.endereco) {
     const end = imovel.endereco.length > 60
-      ? imovel.endereco.slice(0, 57) + "…"
+      ? imovel.endereco.slice(0, 59) + "…"
       : imovel.endereco;
     enderecoLine = `🗺 ${end}`;
   }
