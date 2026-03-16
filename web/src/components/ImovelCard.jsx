@@ -17,10 +17,18 @@ const TIPO_COLOR = {
   "Terreno": "bg-amber-100 text-amber-800",
 };
 
+const ESTADO_CONFIG = {
+  "Novo":            { cls: "bg-green-100 text-green-700",  label: "Novo" },
+  "Reformado":       { cls: "bg-blue-100 text-blue-700",   label: "Reformado" },
+  "Bem conservado":  { cls: "bg-gray-100 text-gray-600",   label: "Bem conservado" },
+  "Precisa reforma": { cls: "bg-yellow-100 text-yellow-700", label: "Precisa reforma" },
+};
+
 export default function ImovelCard({ imovel }) {
   const {
     url, titulo, tipo, bairro, quartos, suites, garagem,
     area_m2, preco, ultima_modificacao, eh_cobertura, eh_terreo,
+    estado_conservacao, mobiliado, diferenciais,
   } = imovel;
 
   const tipoColor = TIPO_COLOR[tipo] ?? "bg-gray-100 text-gray-700";
@@ -89,6 +97,23 @@ export default function ImovelCard({ imovel }) {
           )}
         </div>
       </div>
+
+      {/* Enriquecimento */}
+      {(estado_conservacao || mobiliado || (diferenciais?.length > 0)) && (
+        <div className="px-4 pb-3 flex flex-wrap gap-1.5">
+          {estado_conservacao && ESTADO_CONFIG[estado_conservacao] && (
+            <span className={`chip text-xs ${ESTADO_CONFIG[estado_conservacao].cls}`}>
+              {ESTADO_CONFIG[estado_conservacao].label}
+            </span>
+          )}
+          {mobiliado && (
+            <span className="chip text-xs bg-teal-100 text-teal-700">Mobiliado</span>
+          )}
+          {diferenciais?.slice(0, 3).map((d) => (
+            <span key={d} className="chip text-xs bg-gray-100 text-gray-600">{d}</span>
+          ))}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-4 pb-4 pt-2 border-t border-gray-50 flex items-center justify-between gap-2">
