@@ -112,7 +112,13 @@ export interface Imovel {
 📝 IPTU R$ 120/mês · Semi-mobiliado     (observacoes_extras, até 3)
 ```
 
-Linhas com valor `null` ou array vazio são omitidas. O caption respeita o limite de 1024 caracteres do Telegram via truncagem com `slice` nos arrays.
+Linhas com valor `null` ou array vazio são omitidas. Regras de truncagem:
+
+- Arrays: `slice` por campo (acabamentos ≤3, amenidades ≤3, localização ≤2, observações ≤3)
+- Endereço: truncar em 60 chars com `…` se ultrapassar
+- Fallback final: se o caption completo exceder 1020 chars, truncar com `caption.slice(0, 1020) + "…"`
+
+**`valor_condominio` parse**: se LLM retornar string (ex: `"600"` ou `"R$600"`), tentar `parseFloat` antes de rejeitar como null. Aceitar apenas números positivos.
 
 ---
 
@@ -152,5 +158,8 @@ Após aplicar a migration e fazer deploy da Edge Function:
 
 ```bash
 cd scraper
+python enrich_imoveis.py --test 5  # validar com 5 imóveis primeiro
 python enrich_imoveis.py --force   # re-processa todos os imóveis
 ```
+
+Validação: confirmar no Supabase que `valor_condominio` está populado em imóveis cujas descrições mencionam condomínio.
