@@ -18,6 +18,7 @@ export interface ToolFilters {
   aceita_financiamento?: boolean;
   novo?: boolean;
   reformado?: boolean;
+  mobiliado?: boolean;
   caracteristicas?: string[];
   texto?: string;
   modalidade?: "venda" | "aluguel";
@@ -39,6 +40,7 @@ export interface SupabaseFilters {
   aceitaFinanciamento?: boolean;
   novo?: boolean;
   reformado?: boolean;
+  mobiliado?: boolean;
   caracteristicas?: string[];
   texto?: string;
   modalidade?: "venda" | "aluguel";
@@ -68,6 +70,7 @@ export function buildSupabaseFilters(toolInput: ToolFilters): SupabaseFilters {
     aceitaFinanciamento: toolInput.aceita_financiamento,
     novo:                toolInput.novo,
     reformado:           toolInput.reformado,
+    mobiliado:           toolInput.mobiliado,
     caracteristicas:     toolInput.caracteristicas,
     texto:               toolInput.texto,
     modalidade:          toolInput.modalidade,
@@ -105,6 +108,7 @@ export async function buscarImoveis(
   if (filters.aceitaFinanciamento)   query = query.eq("aceita_financiamento", true);
   if (filters.novo)                  query = query.eq("novo", true);
   if (filters.reformado)             query = query.eq("reformado", true);
+  if (filters.mobiliado != null)     query = query.eq("mobiliado", filters.mobiliado);
   if (filters.caracteristicas?.length) query = query.overlaps("caracteristicas", filters.caracteristicas);
   if (filters.modalidade)              query = query.eq("modalidade", filters.modalidade);
 
@@ -144,6 +148,7 @@ export const BUSCAR_IMOVEIS_TOOL = {
       aceita_financiamento: { type: "boolean" },
       novo:                 { type: "boolean" },
       reformado:            { type: "boolean" },
+      mobiliado:            { type: "boolean", description: "true para imóveis mobiliados" },
       caracteristicas:      { type: "array", items: { type: "string" }, description: "Ex: ['piscina','academia']" },
       texto:                { type: "string", description: "Busca em texto livre" },
       modalidade:           { type: "string", enum: ["venda", "aluguel"], description: "OBRIGATÓRIO: 'venda' para compra, 'aluguel' para locação" },

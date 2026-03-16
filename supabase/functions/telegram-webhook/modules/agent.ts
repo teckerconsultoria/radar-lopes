@@ -4,13 +4,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { BUSCAR_IMOVEIS_TOOL, buscarImoveis, buildSupabaseFilters, type ToolFilters } from "./search.ts";
 
 // Incrementar sempre que o SYSTEM_PROMPT mudar — invalida históricos antigos automaticamente
-const PROMPT_VERSION = "v4";
+const PROMPT_VERSION = "v5";
 
 const SYSTEM_PROMPT = `Você é um assistente de busca de imóveis da Lopes de Andrade Imóveis. Você interage com corretores da imobiliária — não com clientes finais. Seja objetivo, preciso e técnico. Sem excessos de emojis ou linguagem comercial.
 
 Bairros disponíveis no sistema (use exatamente esses nomes): Bancarios, Mangabeira, Jardim Cidade Universitaria, Geisel, Cristo Redentor, Planalto Da Boa Esperanca, Manaira, Mucumagro, Valentina, Paratibe, Portal Do Sol, Gramame, Torre, Jardim Sao Paulo, Jose Americo, Aeroclube, Altiplano, Jardim Oceania, Tambau, Agua Fria, Centro, Jaguaribe, Colibris, Cuia, Industrias.
 Tipos disponíveis: Apartamento, Casa, Terreno, Cobertura, Studio, Sala Comercial.
-Características buscáveis: piscina, academia, churrasqueira, playground, portaria 24h, salão de festas, pet-friendly, varanda gourmet.
+Características buscáveis: piscina, academia, churrasqueira, playground, portaria 24h, salão de festas, pet-friendly, varanda gourmet, mobiliado.
 
 Regras de busca:
 - SEMPRE infira e passe o campo modalidade: "comprar/à venda/venda" → "venda"; "alugar/aluguel/locação" → "aluguel". Se ambíguo, pergunte.
@@ -20,7 +20,7 @@ Regras de busca:
 
 Regras de resposta:
 - Quando a busca retornar resultados, responda com UMA FRASE CURTA apenas (ex: "Encontrei 3 apartamentos nos Bancários."). Os cards são enviados automaticamente — não liste imóveis em texto.
-- IMPORTANTE: Perguntas de follow-up sobre resultados já exibidos (ex: "todos têm suíte?", "qual o maior?", "têm garagem?") devem ser respondidas em texto usando os dados da amostra já disponível no contexto. NÃO chame buscar_imoveis novamente para essas perguntas — os cards já foram enviados e não devem ser reenviados.
+- IMPORTANTE: Perguntas de follow-up sobre resultados já exibidos (ex: "todos têm suíte?", "qual o maior?", "têm garagem?", "é mobiliado?", "qual estado do imóvel?") devem ser respondidas em texto usando os dados da amostra já disponível no contexto (campos: detalhes, caracteristicas, pois, suites, garagem, area_m2, mobiliado, andar, etc.). NÃO chame buscar_imoveis novamente para essas perguntas — os cards já foram enviados e não devem ser reenviados.
 - Quando não houver resultados, informe diretamente: "Nenhum resultado para [critérios]. Qual filtro deseja ajustar?"
 - Responda em português brasileiro, tom direto e profissional.`;
 
@@ -112,7 +112,22 @@ export async function processMessage(
             content: [{
               type: "tool_result",
               tool_use_id: toolUseBlock.id,
-              content: JSON.stringify({ total, sample: imoveis.slice(0, 3).map((i) => ({ titulo: i.titulo, bairro: i.bairro, preco: i.preco })) }),
+              content: JSON.stringify({ total, sample: imoveis.slice(0, 5).map((i) => ({
+                titulo:          i.titulo,
+                bairro:          i.bairro,
+                preco:           i.preco,
+                area_m2:         i.area_m2,
+                quartos:         i.quartos,
+                suites:          i.suites,
+                banheiros:       i.banheiros,
+                garagem:         i.garagem,
+                andar:           i.andar,
+                eh_terreo:       i.eh_terreo,
+                mobiliado:       i.mobiliado,
+                caracteristicas: i.caracteristicas,
+                pois:            i.pois,
+                detalhes:        i.detalhes_imovel,
+              })) }),
             }],
           },
         ] as Anthropic.MessageParam[],
