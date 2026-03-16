@@ -53,3 +53,24 @@ def test_parsear_retorno_inclui_chave_valor_condominio():
     raw = '{"mobiliado": null, "detalhes_imovel": {}}'
     resultado = parsear_resposta(raw)
     assert "valor_condominio" in resultado
+
+
+def test_parsear_valor_condominio_formato_br_com_centavos():
+    """R$ 1.200,50 → 1200.50 (formato BR com milhar e centavos)"""
+    raw = '{"mobiliado": null, "valor_condominio": "R$ 1.200,50", "detalhes_imovel": {}}'
+    resultado = parsear_resposta(raw)
+    assert resultado["valor_condominio"] == 1200.50
+
+
+def test_parsear_valor_condominio_formato_br_milhar_sem_centavos():
+    """1.200 → 1200.0 (milhar sem centavos em formato BR)"""
+    raw = '{"mobiliado": null, "valor_condominio": "1.200", "detalhes_imovel": {}}'
+    resultado = parsear_resposta(raw)
+    assert resultado["valor_condominio"] == 1200.0
+
+
+def test_parsear_valor_condominio_decimal_us():
+    """600.50 → 600.5 (decimal em formato US/padrão)"""
+    raw = '{"mobiliado": null, "valor_condominio": "600.50", "detalhes_imovel": {}}'
+    resultado = parsear_resposta(raw)
+    assert resultado["valor_condominio"] == 600.5

@@ -122,9 +122,23 @@ def parsear_resposta(raw: str) -> dict:
         valor_cond = float(valor_cond_raw)
     elif isinstance(valor_cond_raw, str):
         try:
-            cleaned = re.sub(r"[^\d.,]", "", valor_cond_raw).replace(",", ".")
-            parsed = float(cleaned) if cleaned else 0
-            valor_cond = parsed if parsed > 0 else None
+            s = re.sub(r"[^\d,.]", "", valor_cond_raw)
+            if not s:
+                valor_cond = None
+            elif "," in s:
+                # Formato BR: ponto é milhar, vírgula é decimal → "1.200,50" → 1200.5
+                s = s.replace(".", "").replace(",", ".")
+                parsed = float(s)
+                valor_cond = parsed if parsed > 0 else None
+            elif re.match(r"^\d{1,3}(\.\d{3})+$", s):
+                # Ponto de milhar sem centavos → "1.200" → 1200.0
+                s = s.replace(".", "")
+                parsed = float(s)
+                valor_cond = parsed if parsed > 0 else None
+            else:
+                # Decimal normal → "600.50" → 600.5
+                parsed = float(s)
+                valor_cond = parsed if parsed > 0 else None
         except (ValueError, TypeError):
             valor_cond = None
     else:
