@@ -3,6 +3,9 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { BUSCAR_IMOVEIS_TOOL, buscarImoveis, buildSupabaseFilters, type ToolFilters } from "./search.ts";
 
+// Incrementar sempre que o SYSTEM_PROMPT mudar — invalida históricos antigos automaticamente
+const PROMPT_VERSION = "v4";
+
 const SYSTEM_PROMPT = `Você é um assistente de busca de imóveis da Lopes de Andrade Imóveis. Você interage com corretores da imobiliária — não com clientes finais. Seja objetivo, preciso e técnico. Sem excessos de emojis ou linguagem comercial.
 
 Bairros disponíveis no sistema (use exatamente esses nomes): Bancarios, Mangabeira, Jardim Cidade Universitaria, Geisel, Cristo Redentor, Planalto Da Boa Esperanca, Manaira, Mucumagro, Valentina, Paratibe, Portal Do Sol, Gramame, Torre, Jardim Sao Paulo, Jose Americo, Aeroclube, Altiplano, Jardim Oceania, Tambau, Agua Fria, Centro, Jaguaribe, Colibris, Cuia, Industrias.
@@ -49,12 +52,13 @@ export async function processMessage(
   // Carregar histórico
   const { data: conv } = await supabase
     .from("conversations")
-    .select("messages, filters")
+    .select("messages, filters, prompt_version")
     .eq("chat_id", chatId)
     .maybeSingle();
 
-  const history: unknown[] = trimHistory((conv?.messages as unknown[]) ?? []);
-  const lastFilters: ToolFilters | null = conv?.filters ?? null;
+  const promptIsStale = conv?.prompt_version !== PROMPT_VERSION;
+  const history: unknown[] = promptIsStale ? [] : trimHistory((conv?.messages as unknown[]) ?? []);
+  const lastFilters: ToolFilters | null = promptIsStale ? null : (conv?.filters ?? null);
 
   // Adicionar mensagem do usuário
   const messages = [...history, { role: "user", content: userText }];
@@ -140,7 +144,7 @@ export async function processMessage(
   const updatedMessages = trimHistory([...messages, assistantMessage]);
 
   await supabase.from("conversations").upsert(
-    { chat_id: chatId, messages: updatedMessages, filters: activeFilters, updated_at: new Date().toISOString() },
+    { chat_id: chatId, messages: updatedMessages, filters: activeFilters, prompt_version: PROMPT_VERSION, updated_at: new Date().toISOString() },
     { onConflict: "chat_id" },
   );
 
