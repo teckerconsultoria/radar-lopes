@@ -21,6 +21,11 @@ export interface Imovel {
   suites: number | null;
   garagem: number | null;
   fotos: string[] | null;
+  mobiliado?: boolean | null;
+  detalhes_imovel?: {
+    estado_imovel?: string | null;
+    diferenciais?: string[] | null;
+  } | null;
 }
 
 // ── Parse ─────────────────────────────────────────────────────────────────────
@@ -67,11 +72,27 @@ export function formatCaption(imovel: Imovel): string {
     imovel.area_m2 != null ? `📐 ${imovel.area_m2}m²` : null,
   ].filter(Boolean).join(" · ");
 
+  const estadoEmoji: Record<string, string> = {
+    "novo": "🆕",
+    "reformado": "🔨",
+    "bem conservado": "✔️",
+    "precisa reforma": "🛠️",
+  };
+  const estado = imovel.detalhes_imovel?.estado_imovel;
+  const estadoLabel = estado ? `${estadoEmoji[estado] ?? "🏷️"} ${estado.charAt(0).toUpperCase() + estado.slice(1)}` : null;
+  const diferenciais = imovel.detalhes_imovel?.diferenciais?.slice(0, 2).join(" · ") ?? null;
+  const extras = [
+    imovel.mobiliado === true ? "✅ Mobiliado" : null,
+    estadoLabel,
+    diferenciais,
+  ].filter(Boolean).join("  ");
+
   return [
     `🏠 ${imovel.titulo}`,
     `📍 ${imovel.bairro ?? "—"} · ${imovel.tipo ?? "—"}`,
     detalhes,
     `💰 ${preco}`,
+    extras || null,
   ].filter(Boolean).join("\n");
 }
 
@@ -91,7 +112,7 @@ async function telegramPost(token: string, method: string, body: unknown): Promi
 }
 
 export async function sendText(token: string, chatId: number, text: string): Promise<void> {
-  await telegramPost(token, "sendMessage", { chat_id: chatId, text, parse_mode: "HTML" });
+  await telegramPost(token, "sendMessage", { chat_id: chatId, text });
 }
 
 export async function sendPhoto(
@@ -122,10 +143,24 @@ export async function sendPhoto(
   } else {
     await telegramPost(token, "sendMessage", {
       chat_id: chatId,
-      text: caption + `\n\n<a href="${imovel.url}">Ver anúncio</a>`,
-      parse_mode: "HTML",
+      text: caption + `\n\n${imovel.url}`,
       reply_markup: { inline_keyboard },
     });
+  }
+}
+
+export async function sendVoice(token: string, chatId: number, audioBytes: Uint8Array): Promise<void> {
+  const formData = new FormData();
+  formData.append("chat_id", String(chatId));
+  formData.append("voice", new Blob([audioBytes], { type: "audio/mpeg" }), "voice.mp3");
+  const res = await fetch(`${TELEGRAM_API}/bot${token}/sendVoice`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("Telegram sendVoice error:", err);
+    throw new Error(`Telegram sendVoice falhou: ${err}`);
   }
 }
 

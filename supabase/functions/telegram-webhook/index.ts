@@ -1,6 +1,7 @@
 // supabase/functions/telegram-webhook/index.ts
-import { parseUpdate, sendText, sendPhoto, answerCallbackQuery, getFileUrl } from "./modules/telegram.ts";
+import { parseUpdate, sendText, sendVoice, sendPhoto, answerCallbackQuery, getFileUrl } from "./modules/telegram.ts";
 import { transcribeVoice } from "./modules/transcription.ts";
+import { textToSpeech } from "./modules/tts.ts";
 import { processMessage } from "./modules/agent.ts";
 import { buscarImoveis, buildSupabaseFilters } from "./modules/search.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -18,6 +19,8 @@ Deno.serve(async (req: Request) => {
   const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
   const WHISPER_KEY = Deno.env.get("WHISPER_API_KEY")!;
   const WHISPER_PROVIDER = (Deno.env.get("WHISPER_PROVIDER") ?? "groq") as "groq" | "openai";
+  const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+  const TTS_VOICE = Deno.env.get("TTS_VOICE") ?? "nova";
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
@@ -57,8 +60,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Transcrição de áudio ─────────────────────────────────────────────────
+    const isVoice = parsed.type === "voice";
     let userText = "";
-    if (parsed.type === "voice") {
+    if (isVoice) {
       const fileUrl = await getFileUrl(TOKEN, parsed.fileId);
       userText = await transcribeVoice(fileUrl, WHISPER_KEY, WHISPER_PROVIDER);
     } else {
@@ -66,13 +70,20 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Processar com agente ─────────────────────────────────────────────────
-    const { texto, imoveis, total } = await processMessage(
-      chatId, userText, ANTHROPIC_KEY, SUPABASE_URL, SUPABASE_KEY
+    const { texto, imoveis, total, autoSendCards } = await processMessage(
+      chatId, userText, ANTHROPIC_KEY, SUPABASE_URL, SUPABASE_KEY, isVoice
     );
 
-    if (texto) await sendText(TOKEN, chatId, texto);
+    if (texto) {
+      if (isVoice && OPENAI_KEY) {
+        const audio = await textToSpeech(texto, OPENAI_KEY, TTS_VOICE);
+        await sendVoice(TOKEN, chatId, audio);
+      } else {
+        await sendText(TOKEN, chatId, texto);
+      }
+    }
 
-    if (imoveis.length > 0) {
+    if (autoSendCards && imoveis.length > 0) {
       const slice = imoveis.slice(0, PAGE_SIZE);
       const hasMore = total > PAGE_SIZE;
       for (let i = 0; i < slice.length; i++) {
