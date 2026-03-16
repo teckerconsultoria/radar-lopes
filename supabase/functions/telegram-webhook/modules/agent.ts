@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { BUSCAR_IMOVEIS_TOOL, buscarImoveis, buildSupabaseFilters, type ToolFilters } from "./search.ts";
 
 // Incrementar sempre que o SYSTEM_PROMPT mudar — invalida históricos antigos automaticamente
-const PROMPT_VERSION = "v6";
+const PROMPT_VERSION = "v7";
 
 const SYSTEM_PROMPT = `Você é um assistente de busca de imóveis da Lopes de Andrade Imóveis. Você interage com corretores da imobiliária — não com clientes finais. Seja objetivo, preciso e técnico. Sem excessos de emojis ou linguagem comercial.
 
@@ -17,6 +17,8 @@ Regras de busca:
 - Use buscar_imoveis sempre que houver critérios suficientes. Só pergunte antes se a mensagem for completamente vaga (sem tipo, bairro, preço ou modalidade).
 - NUNCA amplie filtros automaticamente. Se não houver resultados, informe claramente o que não foi encontrado e pergunte ao corretor qual critério ele quer relaxar.
 - NUNCA sugira bairros, preços ou alternativas sem antes verificar no sistema com buscar_imoveis.
+- valor_condominio: campo numérico nullable (R$/mês). Muitos imóveis não têm esse dado — filtrar por valor_condominio_min/max só retorna imóveis que têm o campo preenchido.
+- Custo total (aluguel + condomínio): quando o corretor perguntar pelo total, busque sem filtro de preço (ou com preco_max = valor_total) e calcule o total na resposta usando os dados do sample (preco + valor_condominio de cada imóvel). Informe quais imóveis têm condomínio informado e qual seria o custo total de cada um.
 
 Regras de resposta:
 - Quando a busca retornar resultados, responda com UMA FRASE CURTA apenas (ex: "Encontrei 3 apartamentos nos Bancários."). Os cards são enviados automaticamente — não liste imóveis em texto.
@@ -108,20 +110,21 @@ export async function processMessage(
         tool_use_id: block.id,
         content: idx === 0
           ? JSON.stringify({ total, sample: imoveis.slice(0, 5).map((i) => ({
-              titulo:          i.titulo,
-              bairro:          i.bairro,
-              preco:           i.preco,
-              area_m2:         i.area_m2,
-              quartos:         i.quartos,
-              suites:          i.suites,
-              banheiros:       i.banheiros,
-              garagem:         i.garagem,
-              andar:           i.andar,
-              eh_terreo:       i.eh_terreo,
-              mobiliado:       i.mobiliado,
-              caracteristicas: i.caracteristicas,
-              pois:            i.pois,
-              detalhes:        i.detalhes_imovel,
+              titulo:           i.titulo,
+              bairro:           i.bairro,
+              preco:            i.preco,
+              valor_condominio: i.valor_condominio,
+              area_m2:          i.area_m2,
+              quartos:          i.quartos,
+              suites:           i.suites,
+              banheiros:        i.banheiros,
+              garagem:          i.garagem,
+              andar:            i.andar,
+              eh_terreo:        i.eh_terreo,
+              mobiliado:        i.mobiliado,
+              caracteristicas:  i.caracteristicas,
+              pois:             i.pois,
+              detalhes:         i.detalhes_imovel,
             })) }) + voiceInstruction
           : JSON.stringify({ total: 0, sample: [] }),
       }));
